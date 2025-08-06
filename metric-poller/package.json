@@ -1,6 +1,7 @@
 {
-  "name": "price-streamer",
+  "name": "metric-poller",
   "version": "1.0.0",
+  "description": "",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -8,13 +9,11 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "type": "commonjs",
   "dependencies": {
-    "@upstash/redis": "^1.35.3",
-    "ccxt": "^4.4.98",
+    "discord.js": "^14.21.0",
     "dotenv": "^17.2.1",
-    "https-proxy-agent": "^7.0.6",
-    "pg": "^8.16.3",
-    "ws": "^8.18.3"
+    "node-fetch": "^2.7.0",
+    "pg": "^8.16.3"
   }
 }

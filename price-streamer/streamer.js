@@ -1,67 +1,98 @@
-// streamer.js
+// streamer.js - FINAL PARSER FIX
 const WebSocket = require('ws');
 const { Redis } = require('@upstash/redis');
 const path = require('path');
+const db = require('./db');
 
-// Load .env file from the root directory
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
-console.log('Starting price streamer...');
+console.log('Starting Advanced Smart Streamer...');
 
-// 1. Initialize Redis Client
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL,
   token: process.env.UPSTASH_REDIS_REST_TOKEN,
 });
 console.log('Redis client initialized.');
 
-// 2. Define the list of pairs to watch.
-// In the future, this list will be dynamically fetched from our PostgreSQL database.
-const pairs = ['btcusdt', 'ethusdt', 'gasusdt', 'solusdt'];
-const streams = pairs.map(p => `${p}@ticker`).join('/');
-const binanceWsUrl = `wss://stream.binance.com:9443/ws/${streams}`;
-
 const REDIS_CHANNEL = 'price-updates';
+const IDLE_RECHECK_INTERVAL = 30000;
 
-// 3. Create the main connection function
-function connectToBinance() {
-  console.log('Connecting to Binance WebSocket...');
+const USD_STABLES_GROUP = ['USDT', 'USDC', 'TUSD', 'FDUSD'];
+
+function connect(streams) {
+  if (streams.length === 0) {
+    console.log(`No active Binance alerts found. Re-checking database in ${IDLE_RECHECK_INTERVAL / 1000} seconds...`);
+    setTimeout(runStreamer, IDLE_RECHECK_INTERVAL);
+    return;
+  }
+
+  const binanceWsUrl = `wss://stream.binance.com:9443/ws/${streams.join('/')}`;
+  console.log(`Connecting to Binance combined stream for ${streams.length} pairs...`);
   const ws = new WebSocket(binanceWsUrl);
 
-  ws.on('open', () => {
-    console.log('✅ Connected to Binance WebSocket.');
-  });
+  ws.on('open', () => console.log('✅ Connected to Binance WebSocket.'));
 
   ws.on('message', async (data) => {
-    const message = JSON.parse(data.toString());
-
-    // Check if it's a valid ticker message with a price
-    if (message.e === '24hrTicker' && message.c) {
-      const pair = message.s; // e.g., "BTCUSDT"
-      const price = parseFloat(message.c); // Last price
-
-      const payload = JSON.stringify({ pair, price });
-
-      try {
-        // Publish the price update to the Redis channel
+    try {
+      // --- CORRECTED PARSER ---
+      // We parse the message directly and do NOT look for a .data wrapper.
+      const message = JSON.parse(data.toString());
+      
+      if (message && message.e === '24hrTicker' && message.s && message.c) {
+        const pair = message.s;
+        const price = parseFloat(message.c);
+        const payload = JSON.stringify({ pair, price });
         await redis.publish(REDIS_CHANNEL, payload);
-        // console.log(`Published ${pair}: ${price} to Redis.`); // Uncomment for verbose logging
-      } catch (error) {
-        console.error('Error publishing to Redis:', error);
       }
+    } catch (e) { 
+      console.error('Error processing message:', e); 
     }
   });
 
+  ws.on('ping', () => ws.pong());
+
   ws.on('close', () => {
-    console.log('❌ Disconnected from Binance WebSocket. Reconnecting in 5 seconds...');
-    setTimeout(connectToBinance, 5000); // Attempt to reconnect after 5 seconds
+    console.log('❌ Disconnected from Binance. Will refetch pairs and reconnect in 10 seconds...');
+    setTimeout(runStreamer, 10000);
   });
 
   ws.on('error', (error) => {
-    console.error('WebSocket Error:', error);
-    ws.close(); // This will trigger the 'close' event and the reconnect logic
+    console.error('WebSocket Error:', error.message);
+    ws.close();
   });
 }
 
-// Start the connection
-connectToBinance();
+async function runStreamer() {
+  console.log('Fetching active price alerts from database...');
+  try {
+    const query = `
+      SELECT base_currency, quote_currency, exchange FROM alerts 
+      WHERE status = 'active' 
+        AND alert_type = 'PRICE'
+        AND exchange = 'Binance'; 
+    `;
+    const result = await db.query(query);
+
+    const streamsToWatch = new Set(); 
+
+    for (const alert of result.rows) {
+      if (alert.quote_currency === 'USD_STABLES') {
+        for (const stablecoin of USD_STABLES_GROUP) {
+          const streamName = `${alert.base_currency.toLowerCase()}${stablecoin.toLowerCase()}@ticker`;
+          streamsToWatch.add(streamName);
+        }
+      } else if (alert.base_currency && alert.quote_currency) {
+        const streamName = `${alert.base_currency.toLowerCase()}${alert.quote_currency.toLowerCase()}@ticker`;
+        streamsToWatch.add(streamName);
+      }
+    }
+    
+    connect(Array.from(streamsToWatch));
+
+  } catch (error) {
+    console.error('Error fetching pairs from database:', error);
+    setTimeout(runStreamer, 10000);
+  }
+}
+
+runStreamer();
