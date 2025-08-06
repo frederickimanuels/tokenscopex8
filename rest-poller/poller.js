@@ -41,7 +41,7 @@ async function pollPrices() {
         const price = ticker.last;
 
         if (price) {
-          const payload = JSON.stringify({ pair, price });
+          const payload = JSON.stringify({ exchange: exchangeId, pair, price });
           await redisClient.publish(REDIS_CHANNEL, payload);
           console.log(`  > Published ${exchange.id} ${pair}: ${price}`);
         }

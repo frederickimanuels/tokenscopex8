@@ -20,7 +20,6 @@ const commands = [
               { name: 'Binance', value: 'binance' },
               { name: 'Bybit', value: 'bybit' },
               { name: 'OKX', value: 'okx' },
-              { name: 'KuCoin', value: 'kucoin' },
               { name: 'MEXC', value: 'mexc' },
               { name: 'Bitget', value: 'bitget' }
           ))
