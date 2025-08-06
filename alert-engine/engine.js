@@ -85,7 +85,12 @@ async function main() {
         alertMessage += `\n**Current Price (${pair}):** \`$${price}\``;
 
         if (alert.mention_role_id) {
-          alertMessage += ` <@&${alert.mention_role_id}>`;
+          // If we stored the literal '@everyone', use it directly.
+          // Otherwise, format it as a standard role mention.
+          const mention = alert.mention_role_id === '@everyone' 
+            ? '@everyone' 
+            : `<@&${alert.mention_role_id}>`;
+          alertMessage += ` ${mention}`;
         }
         await channel.send(alertMessage);
       }

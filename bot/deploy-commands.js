@@ -15,9 +15,16 @@ const commands = [
         .setName('price')
         .setDescription('Set an alert for a specific trading pair price.')
         // --- REQUIRED OPTIONS MUST COME FIRST ---
-        .addStringOption(option => option.setName('exchange').setDescription('The exchange to track (e.g., Binance, KuCoin).').setRequired(true)
-          .addChoices({ name: 'Binance', value: 'Binance' }, { name: 'KuCoin', value: 'KuCoin' }))
-        .addStringOption(option => option.setName('coin').setDescription('The coin symbol ONLY (e.g., BTC, ETH, NOT BTC/USDT).').setRequired(true))
+        .addStringOption(option => option.setName('exchange').setDescription('The exchange to track.').setRequired(true)
+          .addChoices(
+              { name: 'Binance', value: 'binance' },
+              { name: 'Bybit', value: 'bybit' },
+              { name: 'OKX', value: 'okx' },
+              { name: 'KuCoin', value: 'kucoin' },
+              { name: 'MEXC', value: 'mexc' },
+              { name: 'Bitget', value: 'bitget' }
+          ))
+        .addStringOption(option => option.setName('coin').setDescription('The coin symbol ONLY (BTC ✅ BTC/USDT ❌).').setRequired(true))
         .addStringOption(option => option.setName('condition').setDescription('The trigger condition.').setRequired(true)
           .addChoices({ name: 'Price rises to or above', value: 'ABOVE' }, { name: 'Price drops to or below', value: 'BELOW' }))
         .addNumberOption(option => option.setName('price').setDescription('The target price in USD.').setRequired(true))

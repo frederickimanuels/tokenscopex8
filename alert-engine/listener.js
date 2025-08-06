@@ -7,7 +7,7 @@ require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 const REDIS_CHANNEL = 'price-updates';
 
 async function main() {
-  const redisTcpUrl = process.env.UPSTASH_REDIS_TCP_URL;
+  const redisTcpUrl = "redis://localhost:6002";
   if (!redisTcpUrl) {
     console.error('Error: UPSTASH_REDIS_TCP_URL not found in .env file.');
     return;

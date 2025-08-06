@@ -1,0 +1,78 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  # --- DATABASE & CACHE ---
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports: # This exposes the port to your host machine for tools like DBeaver
+      - "6001:5432"
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    ports: # Optional: exposes the port to your host machine
+      - "6002:6379"
+
+  # --- APPLICATION SERVICES ---
+  bot:
+    build: ./bot
+    command: node index.js
+    env_file: ./.env
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+
+  alert-engine:
+    build: ./alert-engine
+    command: node engine.js
+    env_file: ./.env
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+
+  price-streamer:
+    build: ./price-streamer
+    command: node streamer.js
+    env_file: ./.env
+    restart: unless-stopped
+    depends_on:
+      - redis
+
+  rest-poller:
+    build: ./rest-poller
+    command: node poller.js
+    env_file: ./.env
+    restart: unless-stopped
+    depends_on:
+      - redis
+  
+  metric-poller:
+    build: ./metric-poller
+    command: node poller.js
+    env_file: ./.env
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+  
+  chart-generator:
+    build: ./chart-generator
+    command: node chart.js
+    ports:
+      - "6003:6003"
+    env_file: ./.env
+    restart: unless-stopped
+
+# Define the persistent volume for Postgres
+volumes:
+  postgres_data:

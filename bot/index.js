@@ -34,6 +34,13 @@ client.on(Events.InteractionCreate, async interaction => {
         const triggerCondition = interaction.options.getString('condition');
         const conditionText = triggerCondition === 'ABOVE' ? 'rises to or above' : 'drops to or below';
 
+        let roleToSave = null;
+        if (role) {
+          // If the selected role's name is '@everyone', save the literal string.
+          // Otherwise, save the role's ID.
+          roleToSave = role.name === '@everyone' ? '@everyone' : role.id;
+        }
+
         const baseCurrency = coin;
         const quoteCurrency = quote ? quote : 'USD_STABLES';
         const replyText = quote ? `\`${baseCurrency}/${quoteCurrency}\`` : `\`${baseCurrency}\` against any major stablecoin`;
@@ -41,7 +48,7 @@ client.on(Events.InteractionCreate, async interaction => {
         const queryText = `
           INSERT INTO alerts(user_id, channel_id, alert_type, exchange, base_currency, quote_currency, target_price, trigger_condition, mention_role_id)
           VALUES($1, $2, 'PRICE', $3, $4, $5, $6, $7, $8) RETURNING *;`;
-        const queryParams = [interaction.user.id, interaction.channel.id, exchange, baseCurrency, quoteCurrency, price, triggerCondition, role ? role.id : null];
+        const queryParams = [interaction.user.id, interaction.channel.id, exchange, baseCurrency, quoteCurrency, price, triggerCondition, roleToSave];
         
         await db.query(queryText, queryParams);
 
@@ -54,11 +61,18 @@ client.on(Events.InteractionCreate, async interaction => {
         const triggerCondition = interaction.options.getString('condition');
         const metricText = metricName === 'BTC_DOMINANCE' ? 'Bitcoin Dominance' : 'Metric';
         const conditionText = triggerCondition === 'ABOVE' ? 'rises to or above' : 'drops to or below';
+
+        let roleToSave = null;
+        if (role) {
+          // If the selected role's name is '@everyone', save the literal string.
+          // Otherwise, save the role's ID.
+          roleToSave = role.name === '@everyone' ? '@everyone' : role.id;
+        }
         
         const queryText = `
           INSERT INTO alerts(user_id, channel_id, alert_type, metric_name, target_price, trigger_condition, mention_role_id)
           VALUES($1, $2, 'METRIC', $3, $4, $5, $6) RETURNING *;`;
-        const queryParams = [interaction.user.id, interaction.channel.id, metricName, target, triggerCondition, role ? role.id : null];
+        const queryParams = [interaction.user.id, interaction.channel.id, metricName, target, triggerCondition, roleToSave];
         
         await db.query(queryText, queryParams);
 
@@ -71,10 +85,17 @@ client.on(Events.InteractionCreate, async interaction => {
 
           const [baseCurrency, quoteCurrency] = pair.split('/');
 
+          let roleToSave = null;
+          if (role) {
+            // If the selected role's name is '@everyone', save the literal string.
+            // Otherwise, save the role's ID.
+            roleToSave = role.name === '@everyone' ? '@everyone' : role.id;
+          }
+
           const queryText = `
             INSERT INTO alerts(user_id, channel_id, alert_type, exchange, base_currency, quote_currency, target_price, trigger_condition, mention_role_id)
             VALUES($1, $2, 'PRICE', 'Uniswap_V3', $3, $4, $5, $6, $7) RETURNING *;`;
-          const queryParams = [interaction.user.id, interaction.channel.id, baseCurrency, quoteCurrency, price, triggerCondition, role ? role.id : null];
+          const queryParams = [interaction.user.id, interaction.channel.id, baseCurrency, quoteCurrency, price, triggerCondition, roleToSave];
           await db.query(queryText, queryParams);
 
           const conditionText = triggerCondition === 'ABOVE' ? 'rises to or above' : 'drops to or below';
@@ -180,7 +201,7 @@ client.on(Events.InteractionCreate, async interaction => {
     const exchange = interaction.options.getString('exchange');
     const coin = interaction.options.getString('coin');
     const quote = interaction.options.getString('quote');
-    const chartGeneratorUrl = `http://localhost:${process.env.CHART_PORT || 3000}/generate`;
+    const chartGeneratorUrl = `http://chart-generator:${process.env.CHART_PORT}/generate`;
 
     try {
         const response = await fetch(chartGeneratorUrl, {

@@ -1,16 +1,15 @@
 // rest-poller/poller.js
 const ccxt = require('ccxt');
-const { Redis } = require('@upstash/redis');
+const { createClient } = require('redis');
 const path = require('path');
 
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 console.log('Starting REST Poller service...');
 
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN,
-});
+const redisClient = createClient({ url: process.env.UPSTASH_REDIS_TCP_URL });
+redisClient.on('error', (err) => console.error('Redis Client Error', err));
+redisClient.connect();
 console.log('Redis client initialized.');
 
 // We publish to the SAME channel as the WebSocket streamer
@@ -43,7 +42,7 @@ async function pollPrices() {
 
         if (price) {
           const payload = JSON.stringify({ pair, price });
-          await redis.publish(REDIS_CHANNEL, payload);
+          await redisClient.publish(REDIS_CHANNEL, payload);
           console.log(`  > Published ${exchange.id} ${pair}: ${price}`);
         }
       }
