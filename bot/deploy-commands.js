@@ -34,7 +34,18 @@ const commands = [
         .addStringOption(option => option.setName('condition').setDescription('The trigger condition.').setRequired(true)
           .addChoices({ name: 'Rises to or above', value: 'ABOVE' }, { name: 'Drops to or below', value: 'BELOW' }))
         .addNumberOption(option => option.setName('target').setDescription('The target value (e.g., 55.5 for 55.5%).').setRequired(true))
-        .addRoleOption(option => option.setName('role').setDescription('Optional role to mention.').setRequired(false))),
+        .addRoleOption(option => option.setName('role').setDescription('Optional role to mention.').setRequired(false)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('dex')
+        .setDescription('Set an alert for a pair on a Decentralized Exchange.')
+        .addStringOption(option => option.setName('pair').setDescription('The DEX pair to track.').setRequired(true)
+          .addChoices({ name: 'WETH / USDC (Uniswap V3)', value: 'WETH/USDC' }))
+        .addStringOption(option => option.setName('condition').setDescription('The trigger condition.').setRequired(true)
+          .addChoices({ name: 'Price rises to or above', value: 'ABOVE' }, { name: 'Price drops to or below', value: 'BELOW' }))
+        .addNumberOption(option => option.setName('price').setDescription('The target price in USDC.').setRequired(true))
+        .addRoleOption(option => option.setName('role').setDescription('Optional role to mention.').setRequired(false))
+    ),
   
   // List Alerts Command
   new SlashCommandBuilder()
@@ -50,11 +61,21 @@ const commands = [
         .setDescription('The ID of the alert you want to delete.')
         .setRequired(true)),
 
+  // Price Command
   new SlashCommandBuilder()
     .setName('price')
     .setDescription('Gets the latest price for a coin or trading pair.')
     .addStringOption(option => option.setName('coin').setDescription('The coin symbol ONLY (e.g., BTC, ETH).').setRequired(true))
     .addStringOption(option => option.setName('quote').setDescription('Optional: The currency to quote against (e.g., USDT).').setRequired(false)),
+
+  // Chart Command
+  new SlashCommandBuilder()
+    .setName('chart')
+    .setDescription('Generates a price chart for a trading pair.')
+    .addStringOption(option => option.setName('exchange').setDescription('The exchange (e.g., Binance, KuCoin).').setRequired(true))
+    .addStringOption(option => option.setName('coin').setDescription('The coin symbol (e.g., BTC, ETH).').setRequired(true))
+    .addStringOption(option => option.setName('quote').setDescription('The quote currency (e.g., USDT).').setRequired(true)),
+    
 ]
 .map(command => command.toJSON());
 

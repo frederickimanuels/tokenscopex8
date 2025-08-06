@@ -1,4 +1,4 @@
-// alert-engine/engine.js
+// alert-engine/engine.js - FINAL DEX INTEGRATION
 const { createClient: createRedisClient } = require('redis');
 const { Client, GatewayIntentBits } = require('discord.js');
 const db = require('./db');
@@ -14,7 +14,6 @@ async function main() {
   await discordClient.login(process.env.DISCORD_TOKEN);
   console.log(`✅ Engine logged in to Discord as ${discordClient.user.tag}`);
 
-  // We now create two clients: one for standard commands (SET) and one for subscribing (SUBSCRIBE)
   const redisClient = createRedisClient({ url: process.env.UPSTASH_REDIS_TCP_URL });
   redisClient.on('error', (err) => console.error('Redis Client Error', err));
   await redisClient.connect();
@@ -28,40 +27,61 @@ async function main() {
     const { pair, price } = JSON.parse(message);
 
     try {
-      // --- NEW CACHING LOGIC ---
-      // Set the latest price in Redis with a 5-minute (300 seconds) expiry.
+      // --- Universal Caching Logic ---
       await redisClient.set(`price:${pair}`, price, { EX: 300 });
 
-      // --- Alert checking logic (unchanged) ---
+      // --- Universal Alert Processing Logic ---
       let baseCurrency = null;
       let quoteCurrency = null;
-      for (const stable of USD_STABLES_GROUP) {
-        if (pair.endsWith(stable)) {
-          baseCurrency = pair.substring(0, pair.length - stable.length);
-          quoteCurrency = stable;
-          break;
+      let exchange = null; // We will determine the exchange from the pair format
+
+      if (pair.includes('_UNISWAP')) {
+        // Handle DEX pairs (e.g., "WETHUSDC_UNISWAP")
+        exchange = 'Uniswap_V3';
+        // This is a simple parser; a more robust one could be made for other pairs
+        if (pair === 'WETHUSDC_UNISWAP') {
+            baseCurrency = 'WETH';
+            quoteCurrency = 'USDC';
+        }
+      } else {
+        // Handle CEX pairs (e.g., "BTCUSDT")
+        for (const stable of USD_STABLES_GROUP) {
+          if (pair.endsWith(stable)) {
+            baseCurrency = pair.substring(0, pair.length - stable.length);
+            quoteCurrency = stable;
+            break;
+          }
         }
       }
-      if (!baseCurrency) return;
+
+      if (!baseCurrency) return; // Skip if we couldn't parse the pair
 
       const query = `
         SELECT * FROM alerts
-        WHERE status = 'active' AND alert_type = 'PRICE' AND base_currency = $1
-          AND (quote_currency = $2 OR quote_currency = 'USD_STABLES')
-          AND ((trigger_condition = 'ABOVE' AND target_price <= $3) OR (trigger_condition = 'BELOW' AND target_price >= $3));
+        WHERE status = 'active'
+          AND alert_type = 'PRICE'
+          AND base_currency = $1
+          AND ( (exchange = $2) OR (quote_currency = $3 OR quote_currency = 'USD_STABLES') )
+          AND (
+            (trigger_condition = 'ABOVE' AND target_price <= $4) OR
+            (trigger_condition = 'BELOW' AND target_price >= $4)
+          );
       `;
-      const result = await db.query(query, [baseCurrency, quoteCurrency, price]);
+      // Note: The logic for generalized CEX alerts vs specific DEX alerts is handled here.
+      // A specific DEX alert will match `exchange = 'Uniswap_V3'`.
+      // A CEX alert will match the `quote_currency` check.
+      const result = await db.query(query, [baseCurrency, exchange, quoteCurrency, price]);
 
       for (const alert of result.rows) {
         const alertIdentifier = alert.quote_currency === 'USD_STABLES' ? alert.base_currency : `${alert.base_currency}/${alert.quote_currency}`;
-        console.log(`TRIGGERED: Alert ID ${alert.id} for ${alertIdentifier}`);
+        console.log(`TRIGGERED: Alert ID ${alert.id} for ${alertIdentifier} on ${alert.exchange}`);
 
         await db.query(`UPDATE alerts SET status = 'triggered' WHERE id = $1`, [alert.id]);
 
         const channel = await discordClient.channels.fetch(alert.channel_id);
         if (!channel) continue;
 
-        let alertMessage = `🔔 **Price Alert!** 🔔\n<@${alert.user_id}>, your alert for **${alertIdentifier}** was triggered!`;
+        let alertMessage = `🔔 **Price Alert!** 🔔\n<@${alert.user_id}>, your alert for **${alertIdentifier}** on **${alert.exchange}** was triggered!`;
         alertMessage += `\n**Current Price (${pair}):** \`$${price}\``;
 
         if (alert.mention_role_id) {

@@ -20,7 +20,6 @@ redisClient.connect();
 client.on(Events.InteractionCreate, async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
-  // --- HANDLER FOR /setalert ---
    // --- HANDLER FOR /setalert ---
   if (interaction.commandName === 'setalert') {
     await interaction.deferReply({ ephemeral: true });
@@ -64,6 +63,22 @@ client.on(Events.InteractionCreate, async interaction => {
         await db.query(queryText, queryParams);
 
         await interaction.editReply(`📈 **Metric Alert Set!**\nI will notify you when **${metricText}** ${conditionText} **${target}%**.`);
+      } else if (interaction.options.getSubcommand() === 'dex') {
+          const pair = interaction.options.getString('pair'); // e.g., "WETH/USDC"
+          const price = interaction.options.getNumber('price');
+          const role = interaction.options.getRole('role');
+          const triggerCondition = interaction.options.getString('condition');
+
+          const [baseCurrency, quoteCurrency] = pair.split('/');
+
+          const queryText = `
+            INSERT INTO alerts(user_id, channel_id, alert_type, exchange, base_currency, quote_currency, target_price, trigger_condition, mention_role_id)
+            VALUES($1, $2, 'PRICE', 'Uniswap_V3', $3, $4, $5, $6, $7) RETURNING *;`;
+          const queryParams = [interaction.user.id, interaction.channel.id, baseCurrency, quoteCurrency, price, triggerCondition, role ? role.id : null];
+          await db.query(queryText, queryParams);
+
+          const conditionText = triggerCondition === 'ABOVE' ? 'rises to or above' : 'drops to or below';
+          await interaction.editReply(`🔔 **DEX Alert Set!**\nI will notify you when \`${pair}\` on **Uniswap V3** ${conditionText} **$${price}**.`);
       }
     } catch (error) {
       console.error('Error processing /setalert command:', error);
@@ -156,6 +171,43 @@ client.on(Events.InteractionCreate, async interaction => {
       await interaction.editReply({ embeds: [embed] });
     } else {
       await interaction.editReply(`Sorry, the price for \`${coin}/${quote}\` is not available right now. An alert must be active for its price to be tracked.`);
+    }
+  }
+
+  else if (interaction.commandName === 'chart') {
+    await interaction.deferReply();
+
+    const exchange = interaction.options.getString('exchange');
+    const coin = interaction.options.getString('coin');
+    const quote = interaction.options.getString('quote');
+    const chartGeneratorUrl = `http://localhost:${process.env.CHART_PORT || 3000}/generate`;
+
+    try {
+        const response = await fetch(chartGeneratorUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ exchangeId: exchange.toLowerCase(), coin, quote })
+        });
+
+        if (!response.ok) {
+            const { error } = await response.json();
+            await interaction.editReply(`Could not generate chart: ${error}`);
+            return;
+        }
+
+        const { chartUrl } = await response.json();
+
+        const embed = new EmbedBuilder()
+            .setTitle(`Price Chart for ${coin.toUpperCase()}/${quote.toUpperCase()} on ${exchange}`)
+            .setImage(chartUrl)
+            .setColor('#5865F2')
+            .setTimestamp();
+
+        await interaction.editReply({ embeds: [embed] });
+
+    } catch (error) {
+        console.error(error);
+        await interaction.editReply('An error occurred while communicating with the chart service.');
     }
   }
 });
